@@ -14,12 +14,17 @@ typedef struct Customer
 int verifyCustomerFile(char *customerFile);
 int verifyCommandsFile(char *commandsFile);
 
+int countCustomerResources(char *customerFile);
+int countCommandsResources(char *commandsFile);
+
 // FUNCOES PARA CONTAR QUANTIDADE DE CUSTOMERS E COMANDOS
 int countCustomer(char *customerFile);
 int countCommands(char *commandsFile);
 
 int main(int argc, char *argv[])
 {
+  char *customerFile = "customer.txt";
+  char *commandsFile = "commands.txt";
   int number_of_customers;
   int number_of_resources;
   int *avaible;
@@ -28,16 +33,15 @@ int main(int argc, char *argv[])
   number_of_resources = argc - 1;
   avaible = (int *)malloc(number_of_resources * sizeof(int));
 
+  // Armazenando os valores dos recursos disponiveis
   int i;
   for (i = 0; i < number_of_resources; i++)
   {
     avaible[i] = atoi(argv[i + 1]);
-    printf("Resource %d -> %d\n", i, avaible[i]);
+    printf("Resource %c -> %d\n", i + 65, avaible[i]);
   }
 
-  char *customerFile = "customer.txt";
-  char *commandsFile = "commands.txt";
-  // Verificacao do CustomerFile
+  // Verificando se os dois arquivos estão na formatação correta
   if (verifyCustomerFile(customerFile) == 0)
   {
     printf("Fail to read customer.txt\n");
@@ -47,6 +51,19 @@ int main(int argc, char *argv[])
   if (verifyCommandsFile(commandsFile) == 0)
   {
     printf("Fail to read commands.txt\n");
+    return 0;
+  }
+
+  // Verificando se a quantidade de recursos é a mesma nos dois arquivos e na linha de comando.
+  if (number_of_resources != countCustomerResources(customerFile))
+  {
+    printf("Incompatibility between customer.txt and command line\n");
+    return 0;
+  }
+
+  if (number_of_resources != countCommandsResources(commandsFile) - 2)
+  {
+    printf("Incompatibility between commands.txt and command line\n");
     return 0;
   }
 
@@ -113,6 +130,9 @@ int verifyCustomerFile(char *customerFile)
   }
 
   char line[100];
+  int numTokens = 0;
+  int isFirstLine = 1;
+
   while (fgets(line, sizeof(line), file) != NULL)
   {
     size_t len = strlen(line);
@@ -130,7 +150,7 @@ int verifyCustomerFile(char *customerFile)
     }
 
     char *token = strtok(line, ",");
-    int isFirstToken = 1;
+    int numTokensInLine = 0;
 
     while (token != NULL)
     {
@@ -144,13 +164,21 @@ int verifyCustomerFile(char *customerFile)
       }
 
       token = strtok(NULL, ",");
-      if (token != NULL && isFirstToken && token[0] == ',')
+      numTokensInLine++;
+    }
+
+    if (isFirstLine)
+    {
+      numTokens = numTokensInLine;
+      isFirstLine = 0;
+    }
+    else
+    {
+      if (numTokensInLine != numTokens)
       {
         fclose(file);
         return 0;
       }
-
-      isFirstToken = 0;
     }
   }
 
@@ -168,6 +196,9 @@ int verifyCommandsFile(char *commandsFile)
   }
 
   char line[100];
+  int numTokens = 0; // Variável para armazenar a quantidade de elementos na primeira linha
+  int isFirstLine = 1;
+
   while (fgets(line, sizeof(line), file) != NULL)
   {
     size_t len = strlen(line);
@@ -184,7 +215,8 @@ int verifyCommandsFile(char *commandsFile)
     }
 
     char *command = strtok(line, " ");
-    // printf("%s\n", command);
+
+    // Ignorar linhas que começam com '*'
     if (!isalpha(command[0]))
     {
       fclose(file);
@@ -192,9 +224,16 @@ int verifyCommandsFile(char *commandsFile)
     }
 
     char *token = strtok(NULL, " ");
+    int numTokensInLine = 1;
+
     while (token != NULL)
     {
-      // printf("%s\n", token);
+      if (strcmp(token, "*") == 0)
+      {
+        token = strtok(NULL, " ");
+        continue;
+      }
+
       for (int i = 0; i < strlen(token); i++)
       {
         if (!isdigit(token[i]))
@@ -203,10 +242,64 @@ int verifyCommandsFile(char *commandsFile)
           return 0;
         }
       }
+
       token = strtok(NULL, " ");
+      numTokensInLine++;
+    }
+
+    if (isFirstLine)
+    {
+      numTokens = numTokensInLine;
+      isFirstLine = 0;
+    }
+    else
+    {
+      if (numTokensInLine != numTokens)
+      {
+        fclose(file);
+        return 0;
+      }
     }
   }
 
   fclose(file);
   return 1;
+}
+
+int countCustomerResources(char *customerFile)
+{
+  FILE *file = fopen(customerFile, "r");
+
+  char line[100];
+  fgets(line, sizeof(line), file);
+
+  int numColumns = 0;
+  char *token = strtok(line, ",");
+  while (token != NULL)
+  {
+    numColumns++;
+    token = strtok(NULL, ",");
+  }
+
+  fclose(file);
+  return numColumns;
+}
+
+int countCommandsResources(char *commandsFile)
+{
+  FILE *file = fopen(commandsFile, "r");
+
+  char line[100];
+  fgets(line, sizeof(line), file);
+
+  int numColumns = 0;
+  char *token = strtok(line, " ");
+  while (token != NULL)
+  {
+    numColumns++;
+    token = strtok(NULL, " ");
+  }
+
+  fclose(file);
+  return numColumns;
 }
