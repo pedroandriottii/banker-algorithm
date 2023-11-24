@@ -25,7 +25,6 @@ int countCustomer(char *customerFile);
 int countCommands(char *commandsFile);
 
 void readCustomerFile(int number_of_customers, int number_of_resources);
-void printCustomers(int number_of_customers, int number_of_resources);
 void readCommandFile(int number_of_resources, int number_of_customers);
 void executeCommand(char *command, int number_of_resources, int number_of_customers);
 void allocateResources(int customer_num, int request[], int number_of_resources, int number_of_customers);
@@ -42,6 +41,10 @@ int main(int argc, char *argv[])
   int number_of_resources;
   number_of_resources = argc - 1;
   available = (int *)malloc(number_of_resources * sizeof(int));
+
+  if (remove("results.txt") != 0)
+  {
+  }
 
   // Armazenando os valores dos recursos disponiveis
   int i;
@@ -79,7 +82,6 @@ int main(int argc, char *argv[])
   number_of_customers = countCustomer(customerFile);
 
   readCustomerFile(number_of_customers, number_of_resources);
-  printCustomers(number_of_customers, number_of_resources);
   readCommandFile(number_of_resources, number_of_customers);
 
   return 0;
@@ -353,64 +355,91 @@ void readCommandFile(int number_of_resources, int number_of_customers)
   fclose(file);
 }
 
-// -- OK --
 void executeCommand(char *command, int number_of_resources, int number_of_customers)
 {
-  char mode[3];
+  char *mode;
   int customer;
-  int resources[number_of_resources];
+  int *resources = malloc(number_of_resources * sizeof(int));
 
-  sscanf(command, "%s", mode);
+  if (strncmp(command, "*", 1) == 0)
+  {
+    printState(number_of_customers, number_of_resources);
+    free(resources);
+    return;
+  }
+
+  mode = strtok(command, " ");
+  printf("%s\n", mode);
 
   if (strcmp(mode, "RQ") == 0)
   {
-    sscanf(command, "%s %d", mode, &customer);
-    // Lê os recursos solicitados e realiza a requisição
+    customer = atoi(strtok(NULL, " "));
     for (int i = 0; i < number_of_resources; i++)
     {
-      sscanf(command, "%d", &resources[i]);
+      resources[i] = atoi(strtok(NULL, " "));
     }
     allocateResources(customer, resources, number_of_resources, number_of_customers);
   }
   else if (strcmp(mode, "RL") == 0)
   {
-    sscanf(command, "%s %d", mode, &customer);
-    // Lê os recursos a serem liberados e realiza a liberação
+    customer = atoi(strtok(NULL, " "));
     for (int i = 0; i < number_of_resources; i++)
     {
-      sscanf(command, "%d", &resources[i]);
+      resources[i] = atoi(strtok(NULL, " "));
+      printf("%d\n", resources[i]);
     }
-    releaseResources(customer, resources, number_of_customers);
+    releaseResources(customer, resources, number_of_resources);
   }
-  else if (strcmp(mode, "*") == 0)
-  {
-    printState(number_of_resources, number_of_customers);
-  }
+
+  free(resources);
 }
 
 void allocateResources(int customer_num, int request[], int number_of_resources, int number_of_customers)
 {
-  // Verifica se o pedido excede a necessidade máxima
+  FILE *outputFile = fopen("results.txt", "a");
+
+  if (outputFile == NULL)
+  {
+    perror("Error opening results.txt");
+    return;
+  }
+
   for (int i = 0; i < number_of_resources; i++)
   {
     if (request[i] > customers[customer_num].need[i])
     {
-      printf("The customer %d request exceeds its max need\n", customer_num);
+      fprintf(outputFile, "The customer %d request ", customer_num);
+      for (int j = 0; j < number_of_resources; j++)
+      {
+        fprintf(outputFile, "%d ", request[j]);
+      }
+      fprintf(outputFile, "was denied because exceed its maximum need\n");
+
+      fclose(outputFile);
       return;
     }
   }
 
-  // Verifica se os recursos estão disponíveis
   for (int i = 0; i < number_of_resources; i++)
   {
     if (request[i] > available[i])
     {
-      printf("The resources are not available for customer %d\n", customer_num);
+      fprintf(outputFile, "The resources");
+      for (int j = 0; j < number_of_resources; j++)
+      {
+        fprintf(outputFile, " %d", available[j]);
+      }
+      fprintf(outputFile, " are not enough to customer %d the request", customer_num);
+      for (int j = 0; j < number_of_resources; j++)
+      {
+        fprintf(outputFile, " %d", request[j]);
+      }
+      fprintf(outputFile, "\n");
+
       return;
     }
   }
 
-  // Aloca os recursos e verifica se o estado continua seguro
   for (int i = 0; i < number_of_resources; i++)
   {
     available[i] -= request[i];
@@ -420,24 +449,30 @@ void allocateResources(int customer_num, int request[], int number_of_resources,
 
   if (!checkSafety(number_of_resources, number_of_customers))
   {
-    // Se não estiver seguro, reverte a alocação
     for (int i = 0; i < number_of_resources; i++)
     {
       available[i] += request[i];
       customers[customer_num].allocation[i] -= request[i];
       customers[customer_num].need[i] += request[i];
     }
-    printf("The customer %d request results in an unsafe state\n", customer_num);
+    fprintf(outputFile, "The customer %d request", customer_num);
+    for (int i = 0; i < number_of_resources; i++)
+    {
+      fprintf(outputFile, " %d", request[i]);
+    }
+    fprintf(outputFile, " was denied because result in an unsafe state\n");
   }
   else
   {
-    printf("Allocate to customer %d the resources", customer_num);
+    fprintf(outputFile, "Allocate to customer %d the resources", customer_num);
     for (int i = 0; i < number_of_resources; i++)
     {
-      printf(" %d", request[i]);
+      fprintf(outputFile, " %d", request[i]);
     }
-    printf("\n");
+    fprintf(outputFile, "\n");
   }
+
+  fclose(outputFile);
 }
 
 int checkSafety(int number_of_resources, int number_of_customers)
@@ -445,19 +480,16 @@ int checkSafety(int number_of_resources, int number_of_customers)
   int work[number_of_resources];
   int finish[number_of_customers];
 
-  // Inicializa o vetor de trabalho com os recursos disponíveis
   for (int i = 0; i < number_of_resources; i++)
   {
     work[i] = available[i];
   }
 
-  // Inicializa o vetor de finalização (finish) como falso para todos os clientes
   for (int i = 0; i < number_of_customers; i++)
   {
     finish[i] = 0;
   }
 
-  // Algoritmo principal de verificação de segurança
   for (int i = 0; i < number_of_customers; i++)
   {
     if (finish[i] == 0)
@@ -481,22 +513,20 @@ int checkSafety(int number_of_resources, int number_of_customers)
         }
         finish[i] = 1;
 
-        // Reinicia a busca
         i = -1;
       }
     }
   }
 
-  // Verifica se todos os clientes podem terminar
   for (int i = 0; i < number_of_customers; i++)
   {
     if (finish[i] == 0)
     {
-      return 0; // O sistema não está em um estado seguro
+      return 0;
     }
   }
 
-  return 1; // O sistema está em um estado seguro
+  return 1;
 }
 
 void calculateNeed(int number_of_customers, int number_of_resources)
@@ -512,17 +542,31 @@ void calculateNeed(int number_of_customers, int number_of_resources)
 
 void releaseResources(int customer_num, int release[], int number_of_resources)
 {
-  // Verifica se o cliente está tentando liberar mais recursos do que foi alocado
+  FILE *outputFile = fopen("results.txt", "a");
+
+  if (outputFile == NULL)
+  {
+    perror("Error opening results.txt");
+    return;
+  }
+  printf("NUMERO DE RECURSOS AQUI-> %d\n", number_of_resources);
+
   for (int i = 0; i < number_of_resources; i++)
   {
     if (release[i] > customers[customer_num].allocation[i])
     {
-      printf("The customer %d release exceeds its allocation\n", customer_num);
+      fprintf(outputFile, "The customer %d release", customer_num);
+      for (int j = 0; j < number_of_resources; j++)
+      {
+        fprintf(outputFile, " %d", release[j]);
+      }
+      fprintf(outputFile, " was denied because exceed its maximum allocation\n");
+
+      fclose(outputFile);
       return;
     }
   }
 
-  // Libera os recursos
   for (int i = 0; i < number_of_resources; i++)
   {
     available[i] += release[i];
@@ -530,73 +574,56 @@ void releaseResources(int customer_num, int release[], int number_of_resources)
     customers[customer_num].need[i] += release[i];
   }
 
-  printf("Release from customer %d the resources", customer_num);
+  fprintf(outputFile, "Release from customer %d the resources", customer_num);
+
   for (int i = 0; i < number_of_resources; i++)
   {
-    printf(" %d", release[i]);
+    fprintf(outputFile, " %d", release[i]);
   }
-  printf("\n");
+
+  fprintf(outputFile, "\n");
+  fclose(outputFile);
 }
 
 void printState(int number_of_customers, int number_of_resources)
 {
-  printf("Current State:\n");
-  printf("MAXIMUM | ALLOCATION | NEED\n");
+  FILE *outputFile = fopen("results.txt", "a");
+
+  if (outputFile == NULL)
+  {
+    perror("Error opening results.txt");
+    return;
+  }
+
+  fprintf(outputFile, "MAXIMUM | ALLOCATION | NEED\n");
 
   for (int i = 0; i < number_of_customers; i++)
   {
     for (int j = 0; j < number_of_resources; j++)
     {
-      printf("%d ", customers[i].max[j]);
+      fprintf(outputFile, "%d ", customers[i].max[j]);
     }
-    printf("| ");
+    fprintf(outputFile, "| ");
 
     for (int j = 0; j < number_of_resources; j++)
     {
-      printf("%d ", customers[i].allocation[j]);
+      fprintf(outputFile, "%d ", customers[i].allocation[j]);
     }
-    printf("| ");
+    fprintf(outputFile, "| ");
 
     for (int j = 0; j < number_of_resources; j++)
     {
-      printf("%d ", customers[i].need[j]);
+      fprintf(outputFile, "%d ", customers[i].need[j]);
     }
-    printf("\n");
+    fprintf(outputFile, "\n");
   }
 
-  printf("AVAILABLE ");
+  fprintf(outputFile, "AVAILABLE ");
   for (int i = 0; i < number_of_resources; i++)
   {
-    printf("%d ", available[i]);
+    fprintf(outputFile, "%d ", available[i]);
   }
-  printf("\n");
-}
+  fprintf(outputFile, "\n");
 
-void printCustomers(int number_of_customers, int number_of_resources)
-{
-  for (int i = 0; i < number_of_customers; i++)
-  {
-    printf("Customer %d:\n", i + 1);
-
-    printf("Maximum: ");
-    for (int j = 0; j < number_of_resources; j++)
-    {
-      printf("%d ", customers[i].max[j]);
-    }
-    printf("\n");
-
-    printf("Allocation: ");
-    for (int j = 0; j < number_of_resources; j++)
-    {
-      printf("%d ", customers[i].allocation[j]);
-    }
-    printf("\n");
-
-    printf("Need: ");
-    for (int j = 0; j < number_of_resources; j++)
-    {
-      printf("%d ", customers[i].need[j]);
-    }
-    printf("\n\n");
-  }
+  fclose(outputFile);
 }
