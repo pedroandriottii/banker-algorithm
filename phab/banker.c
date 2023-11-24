@@ -27,11 +27,11 @@ int countCommands(char *commandsFile);
 void readCustomerFile(int number_of_customers, int number_of_resources);
 void readCommandFile(int number_of_resources, int number_of_customers);
 void executeCommand(char *command, int number_of_resources, int number_of_customers);
-void allocateResources(int customer_num, int request[], int number_of_resources, int number_of_customers);
-void printState(int number_of_customers, int number_of_resources);
-void releaseResources(int customer_num, int release[], int number_of_resources);
+void allocateResources(int qtyCustomers, int request[], int number_of_resources, int number_of_customers);
+void printTable(int number_of_customers, int number_of_resources);
+void releaseResources(int qtyCustomers, int release[], int number_of_resources);
 void calculateNeed(int number_of_customers, int number_of_resources);
-int checkSafety(int number_of_resources, int number_of_customers);
+int isSafety(int number_of_resources, int number_of_customers);
 
 int main(int argc, char *argv[])
 {
@@ -231,7 +231,6 @@ int verifyCommandsFile(char *commandsFile)
 
     char *command = strtok(line, " ");
 
-    // Ignorar linhas que começam com '*'
     if (!isalpha(command[0]))
     {
       fclose(file);
@@ -361,17 +360,15 @@ void executeCommand(char *command, int number_of_resources, int number_of_custom
   int customer;
   int *resources = malloc(number_of_resources * sizeof(int));
 
-  if (strncmp(command, "*", 1) == 0)
+  printf("%s", command);
+  mode = strtok(command, " \n");
+  printf("MODE->%s\n", mode);
+
+  if (strcmp(mode, "*") == 0)
   {
-    printState(number_of_customers, number_of_resources);
-    free(resources);
-    return;
+    printTable(number_of_customers, number_of_resources);
   }
-
-  mode = strtok(command, " ");
-  printf("%s\n", mode);
-
-  if (strcmp(mode, "RQ") == 0)
+  else if (strcmp(mode, "RQ") == 0)
   {
     customer = atoi(strtok(NULL, " "));
     for (int i = 0; i < number_of_resources; i++)
@@ -386,7 +383,6 @@ void executeCommand(char *command, int number_of_resources, int number_of_custom
     for (int i = 0; i < number_of_resources; i++)
     {
       resources[i] = atoi(strtok(NULL, " "));
-      printf("%d\n", resources[i]);
     }
     releaseResources(customer, resources, number_of_resources);
   }
@@ -394,21 +390,15 @@ void executeCommand(char *command, int number_of_resources, int number_of_custom
   free(resources);
 }
 
-void allocateResources(int customer_num, int request[], int number_of_resources, int number_of_customers)
+void allocateResources(int qtyCustomers, int request[], int number_of_resources, int number_of_customers)
 {
   FILE *outputFile = fopen("results.txt", "a");
 
-  if (outputFile == NULL)
-  {
-    perror("Error opening results.txt");
-    return;
-  }
-
   for (int i = 0; i < number_of_resources; i++)
   {
-    if (request[i] > customers[customer_num].need[i])
+    if (request[i] > customers[qtyCustomers].need[i])
     {
-      fprintf(outputFile, "The customer %d request ", customer_num);
+      fprintf(outputFile, "The customer %d request ", qtyCustomers);
       for (int j = 0; j < number_of_resources; j++)
       {
         fprintf(outputFile, "%d ", request[j]);
@@ -429,13 +419,14 @@ void allocateResources(int customer_num, int request[], int number_of_resources,
       {
         fprintf(outputFile, " %d", available[j]);
       }
-      fprintf(outputFile, " are not enough to customer %d the request", customer_num);
+      fprintf(outputFile, " are not enough to customer %d request", qtyCustomers);
       for (int j = 0; j < number_of_resources; j++)
       {
         fprintf(outputFile, " %d", request[j]);
       }
       fprintf(outputFile, "\n");
 
+      fclose(outputFile);
       return;
     }
   }
@@ -443,19 +434,21 @@ void allocateResources(int customer_num, int request[], int number_of_resources,
   for (int i = 0; i < number_of_resources; i++)
   {
     available[i] -= request[i];
-    customers[customer_num].allocation[i] += request[i];
-    customers[customer_num].need[i] -= request[i];
+    customers[qtyCustomers].allocation[i] += request[i];
+    customers[qtyCustomers].need[i] -= request[i];
   }
 
-  if (!checkSafety(number_of_resources, number_of_customers))
+  int safe = isSafety(number_of_resources, number_of_customers);
+
+  if (!safe)
   {
     for (int i = 0; i < number_of_resources; i++)
     {
       available[i] += request[i];
-      customers[customer_num].allocation[i] -= request[i];
-      customers[customer_num].need[i] += request[i];
+      customers[qtyCustomers].allocation[i] -= request[i];
+      customers[qtyCustomers].need[i] += request[i];
     }
-    fprintf(outputFile, "The customer %d request", customer_num);
+    fprintf(outputFile, "The customer %d request", qtyCustomers);
     for (int i = 0; i < number_of_resources; i++)
     {
       fprintf(outputFile, " %d", request[i]);
@@ -464,7 +457,7 @@ void allocateResources(int customer_num, int request[], int number_of_resources,
   }
   else
   {
-    fprintf(outputFile, "Allocate to customer %d the resources", customer_num);
+    fprintf(outputFile, "Allocate to customer %d the resources", qtyCustomers);
     for (int i = 0; i < number_of_resources; i++)
     {
       fprintf(outputFile, " %d", request[i]);
@@ -475,7 +468,7 @@ void allocateResources(int customer_num, int request[], int number_of_resources,
   fclose(outputFile);
 }
 
-int checkSafety(int number_of_resources, int number_of_customers)
+int isSafety(int number_of_resources, int number_of_customers)
 {
   int work[number_of_resources];
   int finish[number_of_customers];
@@ -540,22 +533,15 @@ void calculateNeed(int number_of_customers, int number_of_resources)
   }
 }
 
-void releaseResources(int customer_num, int release[], int number_of_resources)
+void releaseResources(int qtyCustomers, int release[], int number_of_resources)
 {
   FILE *outputFile = fopen("results.txt", "a");
 
-  if (outputFile == NULL)
-  {
-    perror("Error opening results.txt");
-    return;
-  }
-  printf("NUMERO DE RECURSOS AQUI-> %d\n", number_of_resources);
-
   for (int i = 0; i < number_of_resources; i++)
   {
-    if (release[i] > customers[customer_num].allocation[i])
+    if (release[i] > customers[qtyCustomers].allocation[i])
     {
-      fprintf(outputFile, "The customer %d release", customer_num);
+      fprintf(outputFile, "The customer %d release", qtyCustomers);
       for (int j = 0; j < number_of_resources; j++)
       {
         fprintf(outputFile, " %d", release[j]);
@@ -570,11 +556,11 @@ void releaseResources(int customer_num, int release[], int number_of_resources)
   for (int i = 0; i < number_of_resources; i++)
   {
     available[i] += release[i];
-    customers[customer_num].allocation[i] -= release[i];
-    customers[customer_num].need[i] += release[i];
+    customers[qtyCustomers].allocation[i] -= release[i];
+    customers[qtyCustomers].need[i] += release[i];
   }
 
-  fprintf(outputFile, "Release from customer %d the resources", customer_num);
+  fprintf(outputFile, "Release from customer %d the resources", qtyCustomers);
 
   for (int i = 0; i < number_of_resources; i++)
   {
@@ -585,15 +571,9 @@ void releaseResources(int customer_num, int release[], int number_of_resources)
   fclose(outputFile);
 }
 
-void printState(int number_of_customers, int number_of_resources)
+void printTable(int number_of_customers, int number_of_resources)
 {
   FILE *outputFile = fopen("results.txt", "a");
-
-  if (outputFile == NULL)
-  {
-    perror("Error opening results.txt");
-    return;
-  }
 
   fprintf(outputFile, "MAXIMUM | ALLOCATION | NEED\n");
 
@@ -624,6 +604,5 @@ void printState(int number_of_customers, int number_of_resources)
     fprintf(outputFile, "%d ", available[i]);
   }
   fprintf(outputFile, "\n");
-
   fclose(outputFile);
 }
