@@ -13,14 +13,12 @@ typedef struct Customer
 Customer *customers;
 int *available;
 
-// FUNCOES PARA VERIFICAR SE O ARQUIVO ESTA FORMATADO CORRETAMENTE
 int verifyCustomerFile(char *customerFile);
 int verifyCommandsFile(char *commandsFile);
 
 int countCustomerResources(char *customerFile);
 int countCommandsResources(char *commandsFile);
 
-// FUNCOES PARA CONTAR QUANTIDADE DE CUSTOMERS E COMANDOS
 int countCustomer(char *customerFile);
 int countCommands(char *commandsFile);
 
@@ -32,6 +30,10 @@ void printTable(int number_of_customers, int number_of_resources);
 void releaseResources(int qtyCustomers, int release[], int number_of_resources);
 void calculateNeed(int number_of_customers, int number_of_resources);
 int isSafety(int number_of_resources, int number_of_customers);
+void printTable(int number_of_customers, int number_of_resources);
+int countDigits(int num);
+int findMaxLength(int number_of_customers, int number_of_resources);
+int findMaxAllocLength(int number_of_customers, int number_of_resources);
 
 int main(int argc, char *argv[])
 {
@@ -211,7 +213,7 @@ int verifyCommandsFile(char *commandsFile)
   }
 
   char line[100];
-  int numTokens = 0; // Variável para armazenar a quantidade de elementos na primeira linha
+  int numTokens = 0;
   int isFirstLine = 1;
 
   while (fgets(line, sizeof(line), file) != NULL)
@@ -360,9 +362,7 @@ void executeCommand(char *command, int number_of_resources, int number_of_custom
   int customer;
   int *resources = malloc(number_of_resources * sizeof(int));
 
-  printf("%s", command);
   mode = strtok(command, " \n");
-  printf("MODE->%s\n", mode);
 
   if (strcmp(mode, "*") == 0)
   {
@@ -438,9 +438,7 @@ void allocateResources(int qtyCustomers, int request[], int number_of_resources,
     customers[qtyCustomers].need[i] -= request[i];
   }
 
-  int safe = isSafety(number_of_resources, number_of_customers);
-
-  if (!safe)
+  if (!isSafety(number_of_resources, number_of_customers))
   {
     for (int i = 0; i < number_of_resources; i++)
     {
@@ -468,69 +466,88 @@ void allocateResources(int qtyCustomers, int request[], int number_of_resources,
   fclose(outputFile);
 }
 
-int isSafety(int number_of_resources, int number_of_customers)
+void calculateNeed(int need[P][R], int maxm[P][R], int allot[P][R])
 {
-  int work[number_of_resources];
-  int finish[number_of_customers];
+  for (int i = 0; i < P; i++)
+    for (int j = 0; j < R; j++)
+      need[i][j] = maxm[i][j] - allot[i][j];
+}
 
-  for (int i = 0; i < number_of_resources; i++)
-  {
-    work[i] = available[i];
-  }
+int isSafe(int processes[], int avail[], int maxm[][R], int allot[][R])
+{
+  int need[P][R];
 
-  for (int i = 0; i < number_of_customers; i++)
-  {
-    finish[i] = 0;
-  }
+  // Função para calcular a matriz de necessidade
+  calculateNeed(need, maxm, allot);
 
-  for (int i = 0; i < number_of_customers; i++)
+  // Marcar todos os processos como incompletos
+  int finish[P] = {0};
+
+  // Para armazenar a sequência segura
+  int safeSeq[P];
+
+  // Fazer uma cópia dos recursos disponíveis
+  int work[R];
+  for (int i = 0; i < R; i++)
+    work[i] = avail[i];
+
+  // Enquanto todos os processos não estiverem concluídos
+  // ou o sistema não estiver em um estado seguro.
+  int count = 0;
+  while (count < P)
   {
-    if (finish[i] == 0)
+    // Encontrar um processo que não foi concluído e
+    // cujas necessidades podem ser satisfeitas com os recursos atuais em work[].
+    int found = 0;
+    for (int p = 0; p < P; p++)
     {
-      int canAllocate = 1;
-
-      for (int j = 0; j < number_of_resources; j++)
+      // Primeiro, verificar se um processo está concluído,
+      // se não, vá para a próxima condição
+      if (finish[p] == 0)
       {
-        if (customers[i].need[j] > work[j])
-        {
-          canAllocate = 0;
-          break;
-        }
-      }
+        // Verificar se, para todos os recursos de
+        // P atual, a necessidade é menor
+        // do que o work
+        int j;
+        for (j = 0; j < R; j++)
+          if (need[p][j] > work[j])
+            break;
 
-      if (canAllocate)
-      {
-        for (int j = 0; j < number_of_resources; j++)
+        // Se todas as necessidades de p foram satisfeitas.
+        if (j == R)
         {
-          work[j] += customers[i].allocation[j];
-        }
-        finish[i] = 1;
+          // Adicionar os recursos alocados de
+          // P atual aos recursos disponíveis/work
+          // ou seja, liberar os recursos
+          for (int k = 0; k < R; k++)
+            work[k] += allot[p][k];
 
-        i = -1;
+          // Adicionar este processo à sequência segura.
+          safeSeq[count++] = p;
+
+          // Marcar este p como concluído
+          finish[p] = 1;
+
+          found = 1;
+        }
       }
     }
-  }
 
-  for (int i = 0; i < number_of_customers; i++)
-  {
-    if (finish[i] == 0)
+    // Se não conseguirmos encontrar o próximo processo na sequência segura.
+    if (found == 0)
     {
+      printf("O sistema não está em um estado seguro.\n");
       return 0;
     }
   }
 
-  return 1;
-}
+  // Se o sistema estiver em um estado seguro, então
+  // a sequência segura será a seguinte
+  printf("O sistema está em um estado seguro.\nA sequência segura é: ");
+  for (int i = 0; i < P; i++)
+    printf("%d ", safeSeq[i]);
 
-void calculateNeed(int number_of_customers, int number_of_resources)
-{
-  for (int i = 0; i < number_of_customers; i++)
-  {
-    for (int j = 0; j < number_of_resources; j++)
-    {
-      customers[i].need[j] = customers[i].max[j] - customers[i].allocation[j];
-    }
-  }
+  return 1;
 }
 
 void releaseResources(int qtyCustomers, int release[], int number_of_resources)
@@ -574,8 +591,33 @@ void releaseResources(int qtyCustomers, int release[], int number_of_resources)
 void printTable(int number_of_customers, int number_of_resources)
 {
   FILE *outputFile = fopen("results.txt", "a");
+  int max_word_len = 8;
+  int alloc_word_len = 11;
+  int max_column_len = findMaxLength(number_of_customers, number_of_resources);
+  int alloc_column_len = findMaxAllocLength(number_of_customers, number_of_resources);
+  int max_blank_spaces = 0;
+  int alloc_blank_spaces = 0;
 
-  fprintf(outputFile, "MAXIMUM | ALLOCATION | NEED\n");
+  fprintf(outputFile, "MAXIMUM");
+
+  for (int i = max_word_len; i < max_column_len; i++)
+  {
+    fprintf(outputFile, " ");
+  }
+  fprintf(outputFile, " | ");
+
+  fprintf(outputFile, "ALLOCATION");
+
+  for (int i = alloc_word_len; i < alloc_column_len; i++)
+  {
+    fprintf(outputFile, " ");
+  }
+  fprintf(outputFile, " | ");
+
+  fprintf(outputFile, "NEED\n");
+
+  max_blank_spaces = max_word_len - max_column_len;
+  alloc_blank_spaces = alloc_word_len - alloc_column_len;
 
   for (int i = 0; i < number_of_customers; i++)
   {
@@ -583,11 +625,21 @@ void printTable(int number_of_customers, int number_of_resources)
     {
       fprintf(outputFile, "%d ", customers[i].max[j]);
     }
+
+    for (int k = 0; k < max_blank_spaces; k++)
+    {
+      fprintf(outputFile, " ");
+    }
     fprintf(outputFile, "| ");
 
     for (int j = 0; j < number_of_resources; j++)
     {
       fprintf(outputFile, "%d ", customers[i].allocation[j]);
+    }
+
+    for (int k = 0; k < alloc_blank_spaces; k++)
+    {
+      fprintf(outputFile, " ");
     }
     fprintf(outputFile, "| ");
 
@@ -595,6 +647,7 @@ void printTable(int number_of_customers, int number_of_resources)
     {
       fprintf(outputFile, "%d ", customers[i].need[j]);
     }
+
     fprintf(outputFile, "\n");
   }
 
@@ -603,6 +656,72 @@ void printTable(int number_of_customers, int number_of_resources)
   {
     fprintf(outputFile, "%d ", available[i]);
   }
+
   fprintf(outputFile, "\n");
   fclose(outputFile);
+}
+
+int countDigits(int num)
+{
+  int count = 0;
+
+  if (num == 0)
+  {
+    return 1;
+  }
+
+  while (num != 0)
+  {
+    num /= 10;
+    count++;
+  }
+
+  return count;
+}
+
+int findMaxLength(int number_of_customers, int number_of_resources)
+{
+  int max_length = 0;
+
+  for (int i = 0; i < number_of_customers; i++)
+  {
+    int current_length = 0;
+
+    for (int j = 0; j < number_of_resources; j++)
+    {
+      current_length += countDigits(customers[i].max[j]);
+
+      current_length += 1;
+    }
+
+    if (current_length > max_length)
+    {
+      max_length = current_length;
+    }
+  }
+
+  return max_length;
+}
+
+int findMaxAllocLength(int number_of_customers, int number_of_resources)
+{
+  int max_length = 0;
+
+  for (int i = 0; i < number_of_customers; i++)
+  {
+    int current_length = 0;
+
+    for (int j = 0; j < number_of_resources; j++)
+    {
+      current_length += countDigits(customers[i].allocation[j]);
+
+      current_length += 1;
+    }
+    if (current_length > max_length)
+    {
+      max_length = current_length;
+    }
+  }
+
+  return max_length;
 }
